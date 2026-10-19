@@ -1,60 +1,73 @@
-# AutoTrack - Automotive Production Monitoring Dashboard
+# AutoTrack — Automotive Production Monitoring System
 
-AutoTrack is a real-time production monitoring and analytics dashboard tailored for automotive manufacturing plants. It tracks overall equipment effectiveness (OEE), throughput, assembly line health, defect rates, and quality incidents across production lines.
+## Overview
+
+AutoTrack is a web-based application designed to help monitor automotive production activities through a centralized interface.
+
+## Features
+
+- Production monitoring dashboard
+- Frontend and backend integration
+- MySQL database integration
+- Authentication and role-based access, if implemented
+- Organized API communication
+
+## Technology Stack
+
+- **Frontend:** React, TypeScript, Vite
+- **Backend:** Node.js, Express, TypeScript
+- **Database:** MySQL
+- **Version Control:** Git and GitHub
 
 ## Project Structure
 
 ```text
-autotrack/
-├── frontend/             # React + TypeScript frontend
-│   ├── public/           # Static assets
-│   ├── src/
-│   │   ├── api/          # API client and endpoints
-│   │   ├── components/   # Reusable UI components
-│   │   ├── pages/        # Dashboard, Production, Lines, Quality views
-│   │   ├── types/        # TypeScript interfaces & types
-│   │   ├── App.tsx       # Root application layout and routing
-│   │   └── main.tsx      # App entry point
-│   └── package.json
-├── backend/              # Node.js + Express + TypeScript backend
-│   ├── src/
-│   │   ├── config/       # DB and environment configuration
-│   │   ├── routes/       # API route definitions
-│   │   ├── controllers/  # Request handlers
-│   │   ├── services/     # Business logic layer
-│   │   ├── repositories/ # Data access layer
-│   │   ├── middleware/   # Auth, logging, error handling
-│   │   ├── app.ts        # Express application setup
-│   │   └── server.ts     # HTTP server runner
-│   ├── tests/            # Automated test suite
-│   └── package.json
-├── database/             # Relational database scripts
-│   ├── schema.sql        # Table definitions and indexes
-│   └── seed.sql          # Sample production line & telemetry seed data
-└── docs/
-    └── api.md            # API documentation and endpoints
+AutoTrack/
+├── frontend/
+├── backend/
+├── database/
+├── docs/
+├── README.md
+└── .gitignore
 ```
 
-## Getting Started
+## Setup Instructions
 
-### 1. Database
-Set up PostgreSQL / MySQL or run the SQL scripts in `database/`:
+### 1. Clone the repository
+
 ```bash
-# Example for PostgreSQL
-psql -U postgres -d autotrack -f database/schema.sql
-psql -U postgres -d autotrack -f database/seed.sql
+git clone https://github.com/monishaadhi/AutoTrack.git
+cd AutoTrack
 ```
 
-### 2. Backend
-```bash
-cd backend
-npm install
-npm run dev
-```
+### 2. Install dependencies
 
-### 3. Frontend
+Install dependencies separately in the frontend and backend directories:
+
 ```bash
 cd frontend
 npm install
-npm run dev
 ```
+
+In a separate terminal:
+
+```bash
+cd ~/Desktop/AutoTrack/backend
+npm install
+```
+
+### 3. Configure the environment
+
+Create the necessary local environment files using your project's required variable names. Configure your MySQL connection and other required settings. Never commit real passwords, tokens, or API keys.
+
+### 4. Start the application
+
+Use the development scripts defined in each directory's `package.json`. Start the MySQL database before running database-dependent backend features.
+
+## Development Status
+
+AutoTrack is under active development. Setup instructions and features may evolve as development progresses.
+
+## GitHub Repository
+
+https://github.com/monishaadhi/AutoTrack
