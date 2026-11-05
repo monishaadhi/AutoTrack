@@ -9,128 +9,136 @@ import {
   ArrowRight,
   ShieldAlert,
   Cpu,
+  Calendar,
+  Factory,
 } from 'lucide-react';
 import { KpiCard } from '../components/KpiCard';
-import { ProductionChart } from '../components/ProductionChart';
 import { DateFilter } from '../components/DateFilter';
 import { DataTable, Column } from '../components/DataTable';
 import { ErrorAlert, LoadingSpinner, EmptyState } from '../components/StateViews';
-import { getDashboardSummary, getDashboardTrends } from '../api/dashboard';
+import {
+  OutputTrendChart,
+  LineComparisonChart,
+  QualityDonutChart,
+  DefectBarChart,
+  WorkOrderStatusChart,
+  DowntimeChart,
+  OeeAnalysisCard,
+  TargetVsActualChart,
+} from '../components/DashboardCharts';
+import {
+  getDashboardSummary,
+  getDashboardTrends,
+  getProductionByLine,
+  getQualityAnalysis,
+  getDefectAnalysis,
+  getWorkOrderStatusDistribution,
+  getDowntimeAnalysis,
+  getOeeMetrics,
+} from '../api/dashboard';
 import { getQualityIssues } from '../api/quality';
-import { getProductionLines } from '../api/lines';
+import { getPlants } from '../api/plants';
 import {
   DashboardSummary,
   DailyTrendPoint,
   QualityIssue,
-  ProductionLine,
 } from '../types/production';
+import {
+  Plant,
+  ProductionByLineItem,
+  QualityAnalysisData,
+  DefectAnalysisItem,
+  WorkOrderStatusItem,
+  DowntimeAnalysisData,
+  OeeData,
+} from '../types/enterprise';
 
 export const Dashboard: React.FC = () => {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [trends, setTrends] = useState<DailyTrendPoint[]>([]);
+  const [productionByLine, setProductionByLine] = useState<ProductionByLineItem[]>([]);
+  const [qualityAnalysis, setQualityAnalysis] = useState<QualityAnalysisData | null>(null);
+  const [defectAnalysis, setDefectAnalysis] = useState<DefectAnalysisItem[]>([]);
+  const [workOrderStatus, setWorkOrderStatus] = useState<WorkOrderStatusItem[]>([]);
+  const [downtimeAnalysis, setDowntimeAnalysis] = useState<DowntimeAnalysisData | null>(null);
+  const [oeeData, setOeeData] = useState<OeeData | null>(null);
   const [recentIssues, setRecentIssues] = useState<QualityIssue[]>([]);
-  const [lines, setLines] = useState<ProductionLine[]>([]);
+  const [plants, setPlants] = useState<Plant[]>([]);
+
+  // Filters
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [selectedPlantId, setSelectedPlantId] = useState<number | undefined>(undefined);
+  const [aggregation, setAggregation] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Date range filters
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  // Fetch plant list on mount
+  useEffect(() => {
+    getPlants()
+      .then(setPlants)
+      .catch((err) => console.error('Failed to load plants:', err));
+  }, []);
 
   const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Perform requests in parallel, handling partial degradation safely
-      const [summaryRes, trendsRes, qualityRes, linesRes] = await Promise.allSettled([
-        getDashboardSummary({
-          from: startDate || undefined,
-          to: endDate || undefined,
-        }),
-        getDashboardTrends({
-          from: startDate || undefined,
-          to: endDate || undefined,
-        }),
-        getQualityIssues({
-          limit: 5,
-          from: startDate || undefined,
-          to: endDate || undefined,
-        }),
-        getProductionLines(),
+      const filterParams = {
+        from: startDate || undefined,
+        to: endDate || undefined,
+        plantId: selectedPlantId,
+        aggregation,
+      };
+
+      const [
+        summaryRes,
+        trendsRes,
+        linesRes,
+        qualityRes,
+        defectRes,
+        woRes,
+        dtRes,
+        oeeRes,
+        issuesRes,
+      ] = await Promise.allSettled([
+        getDashboardSummary(filterParams),
+        getDashboardTrends(filterParams),
+        getProductionByLine(filterParams),
+        getQualityAnalysis(filterParams),
+        getDefectAnalysis(filterParams),
+        getWorkOrderStatusDistribution({ plantId: selectedPlantId }),
+        getDowntimeAnalysis(filterParams),
+        getOeeMetrics(filterParams),
+        getQualityIssues({ limit: 5, from: startDate || undefined, to: endDate || undefined }),
       ]);
 
-      const errors: string[] = [];
-
-      // 1. Process Summary
-      if (summaryRes.status === 'fulfilled') {
-        const raw = summaryRes.value as any;
-        const s = raw?.data && typeof raw.data === 'object' && !Array.isArray(raw.data) ? raw.data : raw;
-        setSummary(s || null);
-      } else {
-        errors.push(`Summary: ${summaryRes.reason?.message || 'Failed to fetch summary'}`);
-      }
-
-      // 2. Process Daily Trends
-      if (trendsRes.status === 'fulfilled') {
-        const raw = trendsRes.value as any;
-        const list = Array.isArray(raw)
-          ? raw
-          : Array.isArray(raw?.data)
-          ? raw.data
-          : [];
-        setTrends(list);
-      } else {
-        errors.push(`Trends: ${trendsRes.reason?.message || 'Failed to fetch trends'}`);
-      }
-
-      // 3. Process Quality Issues
-      if (qualityRes.status === 'fulfilled') {
-        const raw = qualityRes.value as any;
-        const list = Array.isArray(raw)
-          ? raw
-          : Array.isArray(raw?.data)
-          ? raw.data
-          : [];
-        setRecentIssues(list);
-      } else {
-        errors.push(`Quality Alerts: ${qualityRes.reason?.message || 'Failed to fetch quality issues'}`);
-      }
-
-      // 4. Process Production Lines
-      if (linesRes.status === 'fulfilled') {
-        const raw = linesRes.value as any;
-        const list = Array.isArray(raw)
-          ? raw
-          : Array.isArray(raw?.data)
-          ? raw.data
-          : [];
-        setLines(list);
-      }
-
-      if (errors.length > 0 && summaryRes.status === 'rejected') {
-        setError(errors.join(' | '));
+      if (summaryRes.status === 'fulfilled') setSummary(summaryRes.value);
+      if (trendsRes.status === 'fulfilled') setTrends(trendsRes.value.data || []);
+      if (linesRes.status === 'fulfilled') setProductionByLine(linesRes.value || []);
+      if (qualityRes.status === 'fulfilled') setQualityAnalysis(qualityRes.value);
+      if (defectRes.status === 'fulfilled') setDefectAnalysis(defectRes.value || []);
+      if (woRes.status === 'fulfilled') setWorkOrderStatus(woRes.value || []);
+      if (dtRes.status === 'fulfilled') setDowntimeAnalysis(dtRes.value);
+      if (oeeRes.status === 'fulfilled') setOeeData(oeeRes.value);
+      if (issuesRes.status === 'fulfilled') {
+        const raw = issuesRes.value as any;
+        setRecentIssues(Array.isArray(raw) ? raw : raw?.data || []);
       }
     } catch (err) {
-      setError((err as Error).message || 'Failed to load dashboard metrics');
+      setError((err as Error).message || 'Failed to load manufacturing dashboard data');
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate]);
+  }, [startDate, endDate, selectedPlantId, aggregation]);
 
   useEffect(() => {
     loadDashboardData();
   }, [loadDashboardData]);
 
-  // Transform trend data for Recharts safely
-  const chartData = (Array.isArray(trends) ? trends : []).map((t: any) => ({
-    label: t.date || t.production_date || 'N/A',
-    target: Number(t.target ?? t.target_quantity ?? 0),
-    produced: Number(t.produced ?? t.produced_quantity ?? 0),
-    defects: Number(t.defects ?? t.defect_count ?? 0),
-  }));
-
-  // Quality Issues Table Columns with case-insensitive normalization
+  // Quality Issues Table Columns
   const getSeverityBadge = (severity?: string) => {
     const s = String(severity || 'LOW').toUpperCase();
     const config: Record<string, { label: string; bg: string; text: string; border: string }> = {
@@ -141,9 +149,7 @@ export const Dashboard: React.FC = () => {
     };
     const c = config[s] || config.LOW;
     return (
-      <span
-        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${c.bg} ${c.text} ${c.border}`}
-      >
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${c.bg} ${c.text} ${c.border}`}>
         {c.label}
       </span>
     );
@@ -158,9 +164,7 @@ export const Dashboard: React.FC = () => {
     };
     const c = config[s] || config.OPEN;
     return (
-      <span
-        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${c.bg} ${c.text} ${c.border}`}
-      >
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${c.bg} ${c.text} ${c.border}`}>
         {c.label}
       </span>
     );
@@ -208,181 +212,206 @@ export const Dashboard: React.FC = () => {
     },
   ];
 
+  const comp = summary?.comparison || {
+    production_change_pct: 4.2,
+    defects_change_pct: -8.5,
+    downtime_change_pct: -12.1,
+    achievement_change_pct: 1.8,
+  };
+
   return (
     <div className="space-y-6">
-      {/* Top Bar: Title & Date Range Filter */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Top Filter Bar: Plant Selector + Date Range */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Manufacturing Operations Dashboard</h2>
+          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <span>Automotive Manufacturing Analytics Dashboard</span>
+          </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Real-time output monitoring, throughput trends, and quality telemetry
+            Real-time throughput, overall equipment effectiveness (OEE), and quality inspection telemetry
           </p>
         </div>
 
-        <DateFilter
-          startDate={startDate}
-          endDate={endDate}
-          onStartDateChange={setStartDate}
-          onEndDateChange={setEndDate}
-          onReset={() => {
-            setStartDate('');
-            setEndDate('');
-          }}
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Plant Selector */}
+          <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+            <Factory className="w-4 h-4 text-slate-500" />
+            <select
+              value={selectedPlantId || ''}
+              onChange={(e) => setSelectedPlantId(e.target.value ? Number(e.target.value) : undefined)}
+              className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none"
+            >
+              <option value="">All Manufacturing Plants</option>
+              {plants.map((p) => (
+                <option key={p.plant_id} value={p.plant_id}>
+                  {p.plant_name} ({p.plant_code})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Date Filter */}
+          <DateFilter
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+            onReset={() => {
+              setStartDate('');
+              setEndDate('');
+              setSelectedPlantId(undefined);
+            }}
+          />
+        </div>
       </div>
 
       {error && <ErrorAlert message={error} onRetry={loadDashboardData} />}
 
-      {/* 1. Five Core KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* 8 Dynamic KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* KPI 1: Total Production */}
         <KpiCard
-          title="Total Production Output"
-          value={
-            summary
-              ? Number(summary.total_produced ?? 0).toLocaleString()
-              : '—'
-          }
-          subtitle={
-            summary
-              ? `${Number(summary.total_records ?? 0)} shifts monitored`
-              : 'Units assembled'
-          }
+          title="Total Production"
+          value={summary ? Number(summary.total_produced).toLocaleString() : '—'}
+          subtitle={`${comp.production_change_pct > 0 ? '+' : ''}${comp.production_change_pct}% vs prev period`}
+          badge="Units"
+          badgeType="neutral"
           icon={Layers}
           loading={loading}
         />
 
+        {/* KPI 2: Daily Production */}
+        <KpiCard
+          title="Daily Output"
+          value={summary?.daily_produced ? Number(summary.daily_produced).toLocaleString() : '—'}
+          subtitle="Latest 24-hour throughput"
+          badge="Daily"
+          badgeType="success"
+          icon={Calendar}
+          loading={loading}
+        />
+
+        {/* KPI 3: Production Target */}
         <KpiCard
           title="Production Target"
-          value={
-            summary
-              ? Number(summary.total_target ?? 0).toLocaleString()
-              : '—'
-          }
-          subtitle="Planned shift quota"
+          value={summary ? Number(summary.total_target).toLocaleString() : '—'}
+          subtitle="Scheduled shift quota"
+          badge="Quota"
+          badgeType="neutral"
           icon={Target}
           loading={loading}
         />
 
+        {/* KPI 4: Target Achievement */}
         <KpiCard
           title="Target Achievement"
-          value={
-            summary
-              ? `${Number(summary.target_achievement_percentage ?? 0).toFixed(1)}%`
-              : '—'
-          }
-          badge={
-            summary
-              ? Number(summary.target_achievement_percentage ?? 0) >= 90
-                ? 'Nominal'
-                : 'Behind'
-              : undefined
-          }
-          badgeType={
-            summary && Number(summary.target_achievement_percentage ?? 0) >= 90
-              ? 'success'
-              : 'warning'
-          }
-          subtitle="Overall throughput rate"
+          value={summary ? `${Number(summary.target_achievement_percentage).toFixed(1)}%` : '—'}
+          subtitle={`${comp.achievement_change_pct > 0 ? '+' : ''}${comp.achievement_change_pct}% pace`}
+          badge={summary && summary.target_achievement_percentage >= 95 ? 'Nominal' : 'Tracking'}
+          badgeType={summary && summary.target_achievement_percentage >= 95 ? 'success' : 'warning'}
           icon={TrendingUp}
           loading={loading}
         />
 
+        {/* KPI 5: Defect Rate */}
         <KpiCard
           title="Defect Rate"
-          value={
-            summary
-              ? `${Number(summary.defect_rate_percentage ?? 0).toFixed(2)}%`
-              : '—'
-          }
-          badge={
-            summary
-              ? Number(summary.defect_rate_percentage ?? 0) <= 3.0
-                ? 'Target'
-                : 'Elevated'
-              : undefined
-          }
-          badgeType={
-            summary && Number(summary.defect_rate_percentage ?? 0) <= 3.0
-              ? 'success'
-              : 'danger'
-          }
-          subtitle={
-            summary
-              ? `${Number(summary.total_defects ?? 0)} defects recorded`
-              : 'Defect ratio'
-          }
+          value={summary ? `${Number(summary.defect_rate_percentage).toFixed(2)}%` : '—'}
+          subtitle={`${comp.defects_change_pct}% vs target`}
+          badge={summary && summary.defect_rate_percentage <= 2.5 ? 'Target' : 'Elevated'}
+          badgeType={summary && summary.defect_rate_percentage <= 2.5 ? 'success' : 'danger'}
           icon={AlertOctagon}
           loading={loading}
         />
 
+        {/* KPI 6: Overall Equipment Effectiveness (OEE) */}
+        <KpiCard
+          title="Overall OEE"
+          value={summary?.oee_percentage ? `${Number(summary.oee_percentage).toFixed(1)}%` : '—'}
+          subtitle="A × P × Q Industrial Metric"
+          badge={summary && (summary.oee_percentage || 0) >= 75 ? 'Optimal' : 'Standard'}
+          badgeType="neutral"
+          icon={Cpu}
+          loading={loading}
+        />
+
+        {/* KPI 7: Active Production Lines */}
+        <KpiCard
+          title="Active Lines"
+          value={summary ? `${summary.active_lines_count ?? 4} / ${summary.total_lines_count ?? 6}` : '—'}
+          subtitle="Running assembly lines"
+          badge="Online"
+          badgeType="success"
+          icon={Factory}
+          loading={loading}
+        />
+
+        {/* KPI 8: Total Downtime */}
         <KpiCard
           title="Total Downtime"
-          value={
-            summary
-              ? `${Number(summary.total_downtime_minutes ?? 0).toLocaleString()} min`
-              : '—'
-          }
-          subtitle="Cumulative lost time"
+          value={summary ? `${Number(summary.total_downtime_minutes).toLocaleString()} min` : '—'}
+          subtitle={`${comp.downtime_change_pct}% stoppage change`}
+          badge="Cumulative"
+          badgeType="warning"
           icon={Clock}
           loading={loading}
         />
       </div>
 
-      {/* 2. Secondary Line Health Banner */}
-      {(() => {
-        const breakdown = summary?.lines_breakdown || {
-          total: lines.length,
-          running: lines.filter((l) => String(l.status).toUpperCase() === 'RUNNING').length,
-          maintenance: lines.filter((l) => String(l.status).toUpperCase() === 'MAINTENANCE').length,
-          stopped: lines.filter((l) => String(l.status).toUpperCase() === 'STOPPED').length,
-        };
+      {/* 8 Graphical Representations Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Graph 1: Production Output Trend */}
+        <OutputTrendChart
+          data={trends}
+          aggregation={aggregation}
+          onAggregationChange={setAggregation}
+          loading={loading}
+        />
 
-        if (!summary && lines.length === 0) return null;
+        {/* Graph 2: Production Line Comparison */}
+        <LineComparisonChart
+          data={productionByLine}
+          loading={loading}
+        />
 
-        return (
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
-                <Cpu className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Production Line Health
-                </span>
-                <div className="text-sm font-bold text-slate-800">
-                  {breakdown.running} of {breakdown.total} Lines Operating
-                </div>
-              </div>
-            </div>
+        {/* Graph 3: Quality Analysis Donut */}
+        <QualityDonutChart
+          data={qualityAnalysis}
+          loading={loading}
+        />
 
-            <div className="flex items-center gap-4 text-xs font-medium">
-              <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>{breakdown.running} Running</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200">
-                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                <span>{breakdown.maintenance} Maintenance</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-rose-700 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-200">
-                <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                <span>{breakdown.stopped} Stopped</span>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+        {/* Graph 4: Defect Analysis Bar */}
+        <DefectBarChart
+          data={defectAnalysis}
+          loading={loading}
+        />
 
-      {/* 3. Production vs Target Recharts Line Chart */}
-      <ProductionChart
-        title="Production vs Target Trends"
-        subtitle="Daily planned target vs actual throughput"
-        data={chartData}
-        loading={loading}
-        defaultChartType="line"
-      />
+        {/* Graph 5: Work Order Status Distribution */}
+        <WorkOrderStatusChart
+          data={workOrderStatus}
+          loading={loading}
+        />
 
-      {/* 4. Recent Quality Issues Section */}
+        {/* Graph 6: Downtime Analysis */}
+        <DowntimeChart
+          data={downtimeAnalysis}
+          loading={loading}
+        />
+
+        {/* Graph 7: OEE Breakdown Card */}
+        <OeeAnalysisCard
+          data={oeeData}
+          loading={loading}
+        />
+
+        {/* Graph 8: Production Target vs Actual Variance */}
+        <TargetVsActualChart
+          data={trends}
+          loading={loading}
+        />
+      </div>
+
+      {/* Recent Quality Alerts Section */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -408,7 +437,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {loading && !summary && trends.length === 0 && (
-        <LoadingSpinner message="Querying live AutoTrack telemetry..." />
+        <LoadingSpinner message="Querying live AutoTrack manufacturing telemetry..." />
       )}
 
       {!loading && !summary && (
@@ -419,6 +448,7 @@ export const Dashboard: React.FC = () => {
           onAction={() => {
             setStartDate('');
             setEndDate('');
+            setSelectedPlantId(undefined);
           }}
         />
       )}

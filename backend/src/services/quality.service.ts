@@ -40,6 +40,39 @@ export class QualityService {
     return issue;
   }
 
+  async createIssue(data: {
+    record_id: number;
+    defect_category_id?: number;
+    category?: string;
+    severity?: string;
+    status?: string;
+    description: string;
+  }): Promise<QualityIssueRow> {
+    const insertId = await this.repo.create(data);
+    const created = await this.repo.findById(insertId);
+    if (!created) {
+      throw new ServiceError('Failed to retrieve newly created quality issue', 500);
+    }
+    return created;
+  }
+
+  async updateIssue(
+    id: number,
+    data: Partial<{
+      category: string;
+      severity: string;
+      status: string;
+      description: string;
+    }>
+  ): Promise<QualityIssueRow> {
+    const existing = await this.repo.findById(id);
+    if (!existing) {
+      throw new ServiceError(`Quality issue #${id} not found`, 404);
+    }
+    await this.repo.update(id, data);
+    return (await this.repo.findById(id))!;
+  }
+
   async updateIssueStatus(id: number, status: QualityStatus): Promise<QualityIssueRow> {
     const existing = await this.repo.findById(id);
     if (!existing) {

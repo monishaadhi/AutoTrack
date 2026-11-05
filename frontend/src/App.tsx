@@ -11,8 +11,8 @@ export const App: React.FC = () => {
     switch (pathname) {
       case '/':
         return {
-          title: 'Manufacturing Dashboard',
-          subtitle: 'Live plant output, target achievement, and operational metrics',
+          title: 'Automotive Manufacturing Dashboard',
+          subtitle: 'Live plant output, target achievement, OEE, and quality metrics',
         };
       case '/lines':
         return {
@@ -28,6 +28,31 @@ export const App: React.FC = () => {
         return {
           title: 'Quality & Defect Monitoring',
           subtitle: 'Inspection defect tracking, tolerance logs, and resolution workflow',
+        };
+      case '/work-orders':
+        return {
+          title: 'Vehicle Work Orders',
+          subtitle: 'Batch production scheduling, model quotas, and completion status',
+        };
+      case '/equipment':
+        return {
+          title: 'Equipment Monitoring & Downtime',
+          subtitle: 'Machine operational status, stoppage logs, and failure root causes',
+        };
+      case '/analytics':
+        return {
+          title: 'Analytics & Reports',
+          subtitle: 'Executive intelligence and multi-plant performance benchmarks',
+        };
+      case '/users':
+        return {
+          title: 'User Management',
+          subtitle: 'Role-based access permissions and technician assignments',
+        };
+      case '/settings':
+        return {
+          title: 'System Settings',
+          subtitle: 'Manufacturing parameters, plant calendars, and IoT thresholds',
         };
       default:
         return {

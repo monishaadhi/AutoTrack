@@ -24,6 +24,22 @@ router.get(
   (req, res, next) => qualityController.getIssueById(req, res, next)
 );
 
+// POST /api/quality-issues - Log a new quality issue (Protected: Operator or Admin)
+router.post(
+  '/',
+  authenticateToken,
+  requireRole(['ADMIN', 'OPERATOR']),
+  (req, res, next) => qualityController.createIssue(req, res, next)
+);
+
+// PUT /api/quality-issues/:id - Update an issue (Protected: Operator or Admin)
+router.put(
+  '/:id',
+  authenticateToken,
+  requireRole(['ADMIN', 'OPERATOR']),
+  (req, res, next) => qualityController.updateIssue(req, res, next)
+);
+
 // PATCH /api/quality-issues/:id/status - Update issue status (Protected: Operator or Admin)
 router.patch(
   '/:id/status',

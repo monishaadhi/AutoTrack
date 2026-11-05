@@ -18,10 +18,14 @@ export type QualityStatus = 'OPEN' | 'IN_REVIEW' | 'RESOLVED';
 export interface ProductionLine {
   line_id: number;
   factory_id: number;
-  factory_name: string;
-  factory_location: string;
+  plant_id?: number;
+  factory_name?: string;
+  plant_name?: string;
+  factory_location?: string;
   name: string;
+  line_code?: string;
   status: LineStatus;
+  production_capacity?: number;
   created_at: string;
 }
 
@@ -35,6 +39,8 @@ export interface ProductionRecord {
   shift: ShiftType;
   target_quantity: number;
   produced_quantity: number;
+  good_quantity?: number;
+  defective_quantity?: number;
   defect_count: number;
   downtime_minutes: number;
   created_at: string;
@@ -63,19 +69,32 @@ export interface QualityIssue {
 
 export interface DashboardSummary {
   total_produced: number;
+  daily_produced?: number;
   total_target: number;
   target_achievement_percentage: number;
   total_defects: number;
   defect_rate_percentage: number;
   yield_percentage: number;
+  oee_percentage?: number;
+  availability_percentage?: number;
+  performance_percentage?: number;
+  quality_percentage?: number;
   total_downtime_minutes: number;
   total_records: number;
+  active_lines_count?: number;
+  total_lines_count?: number;
   active_quality_issues: number;
   lines_breakdown: {
     total: number;
     running: number;
     maintenance: number;
     stopped: number;
+  };
+  comparison?: {
+    production_change_pct: number;
+    defects_change_pct: number;
+    downtime_change_pct: number;
+    achievement_change_pct: number;
   };
 }
 
@@ -86,6 +105,7 @@ export interface DailyTrendPoint {
   defects: number;
   downtime_minutes: number;
   achievement_rate: number;
+  variance?: number;
 }
 
 export interface PaginatedResponse<T> {

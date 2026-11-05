@@ -35,6 +35,13 @@ export const getDashboardSummarySchema = z.object({
         message: 'lineId must be a positive integer',
       })
       .transform((val) => (val ? Number(val) : undefined)),
+    plantId: z
+      .string()
+      .optional()
+      .refine((val) => !val || (!isNaN(Number(val)) && Number(val) >= 1), {
+        message: 'plantId must be a positive integer',
+      })
+      .transform((val) => (val ? Number(val) : undefined)),
   }),
 });
 
@@ -65,6 +72,18 @@ export const getDashboardTrendsSchema = z
         .refine((val) => !val || dateRegex.test(val), {
           message: 'endDate must be in YYYY-MM-DD format',
         }),
+      lineId: z
+        .string()
+        .optional()
+        .transform((val) => (val ? Number(val) : undefined)),
+      plantId: z
+        .string()
+        .optional()
+        .transform((val) => (val ? Number(val) : undefined)),
+      aggregation: z
+        .enum(['daily', 'weekly', 'monthly'])
+        .optional()
+        .default('daily'),
     }),
   })
   .refine(

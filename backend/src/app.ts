@@ -23,6 +23,10 @@ import productionRouter from './routes/production.routes';
 import lineRouter from './routes/line.routes';
 import dashboardRouter from './routes/dashboard.routes';
 import qualityRouter from './routes/quality.routes';
+import plantRouter from './routes/plant.routes';
+import workOrderRouter from './routes/workOrder.routes';
+import equipmentRouter from './routes/equipment.routes';
+import downtimeRouter from './routes/downtime.routes';
 
 const app: Application = express();
 
@@ -80,6 +84,10 @@ app.use('/api/production', productionRouter);
 app.use('/api/lines', lineRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/quality-issues', qualityRouter);
+app.use('/api/plants', plantRouter);
+app.use('/api/work-orders', workOrderRouter);
+app.use('/api/equipment', equipmentRouter);
+app.use('/api/downtime', downtimeRouter);
 
 // Centralized error handling
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {

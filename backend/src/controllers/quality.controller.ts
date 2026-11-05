@@ -33,6 +33,37 @@ export class QualityController {
     }
   }
 
+  async createIssue(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { record_id, defect_category_id, category, severity, status, description } = req.body;
+      if (!record_id || !description) {
+        res.status(400).json({ error: 'Bad Request', message: 'record_id and description are required' });
+        return;
+      }
+      const created = await qualityService.createIssue({
+        record_id: Number(record_id),
+        defect_category_id: defect_category_id ? Number(defect_category_id) : undefined,
+        category,
+        severity,
+        status,
+        description,
+      });
+      res.status(201).json(created);
+    } catch (error) {
+      this.handleError(error, res, next);
+    }
+  }
+
+  async updateIssue(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = Number(req.params.id);
+      const updated = await qualityService.updateIssue(id, req.body);
+      res.status(200).json(updated);
+    } catch (error) {
+      this.handleError(error, res, next);
+    }
+  }
+
   async updateIssueStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const id = Number(req.params.id);

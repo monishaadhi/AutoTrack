@@ -59,21 +59,22 @@ export class QualityRepository {
         qi.issue_id,
         qi.record_id,
         pr.line_id,
-        pl.name AS line_name,
-        f.factory_id,
-        f.name AS factory_name,
+        COALESCE(pl.name, pl.line_name) AS line_name,
+        COALESCE(f.factory_id, pl.plant_id, 1) AS factory_id,
+        COALESCE(f.name, p.plant_name, 'Main Plant') AS factory_name,
         DATE_FORMAT(pr.production_date, '%Y-%m-%d') AS production_date,
         pr.shift,
         qi.category,
         qi.severity,
         qi.status,
-        qi.description,
+        COALESCE(qi.description, qi.issue_description) AS description,
         DATE_FORMAT(qi.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
         DATE_FORMAT(qi.updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at
       FROM quality_issues qi
       JOIN production_records pr ON qi.record_id = pr.record_id
       JOIN production_lines pl ON pr.line_id = pl.line_id
-      JOIN factories f ON pl.factory_id = f.factory_id
+      LEFT JOIN factories f ON pl.factory_id = f.factory_id
+      LEFT JOIN plants p ON pl.plant_id = p.plant_id
       WHERE ${whereClause}
       ORDER BY 
         CASE qi.severity 
@@ -104,21 +105,22 @@ export class QualityRepository {
         qi.issue_id,
         qi.record_id,
         pr.line_id,
-        pl.name AS line_name,
-        f.factory_id,
-        f.name AS factory_name,
+        COALESCE(pl.name, pl.line_name) AS line_name,
+        COALESCE(f.factory_id, pl.plant_id, 1) AS factory_id,
+        COALESCE(f.name, p.plant_name, 'Main Plant') AS factory_name,
         DATE_FORMAT(pr.production_date, '%Y-%m-%d') AS production_date,
         pr.shift,
         qi.category,
         qi.severity,
         qi.status,
-        qi.description,
+        COALESCE(qi.description, qi.issue_description) AS description,
         DATE_FORMAT(qi.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
         DATE_FORMAT(qi.updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at
       FROM quality_issues qi
       JOIN production_records pr ON qi.record_id = pr.record_id
       JOIN production_lines pl ON pr.line_id = pl.line_id
-      JOIN factories f ON pl.factory_id = f.factory_id
+      LEFT JOIN factories f ON pl.factory_id = f.factory_id
+      LEFT JOIN plants p ON pl.plant_id = p.plant_id
       WHERE qi.issue_id = ?
     `;
 
@@ -127,16 +129,90 @@ export class QualityRepository {
   }
 
   /**
+   * Creates a new quality issue.
+   */
+  async create(data: {
+    record_id: number;
+    defect_category_id?: number;
+    category?: string;
+    severity?: string;
+    status?: string;
+    description: string;
+  }): Promise<number> {
+    const sql = `
+      INSERT INTO quality_issues (record_id, defect_category_id, category, severity, status, description, issue_description)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+    const cat = data.category || 'OTHER';
+    const sev = data.severity || 'LOW';
+    const stat = data.status || 'OPEN';
+
+    const [result] = await pool.query<ResultSetHeader>(sql, [
+      data.record_id,
+      data.defect_category_id || null,
+      cat,
+      sev,
+      stat,
+      data.description,
+      data.description,
+    ]);
+    return result.insertId;
+  }
+
+  /**
+   * Updates an issue's details.
+   */
+  async update(
+    issueId: number,
+    data: Partial<{
+      category: string;
+      severity: string;
+      status: string;
+      description: string;
+    }>
+  ): Promise<boolean> {
+    const fields: string[] = ['updated_at = CURRENT_TIMESTAMP'];
+    const values: any[] = [];
+
+    if (data.category) {
+      fields.push('category = ?');
+      values.push(data.category);
+    }
+    if (data.severity) {
+      fields.push('severity = ?');
+      values.push(data.severity);
+    }
+    if (data.status) {
+      fields.push('status = ?');
+      values.push(data.status);
+      if (data.status.toUpperCase() === 'RESOLVED') {
+        fields.push('resolved_at = CURRENT_TIMESTAMP');
+      }
+    }
+    if (data.description) {
+      fields.push('description = ?', 'issue_description = ?');
+      values.push(data.description, data.description);
+    }
+
+    values.push(issueId);
+    const sql = `UPDATE quality_issues SET ${fields.join(', ')} WHERE issue_id = ?`;
+    const [result] = await pool.query<ResultSetHeader>(sql, values);
+    return result.affectedRows > 0;
+  }
+
+  /**
    * Updates an issue's status.
    */
   async updateStatus(issueId: number, status: QualityStatus): Promise<boolean> {
     const sql = `
       UPDATE quality_issues
-      SET status = ?, updated_at = CURRENT_TIMESTAMP
+      SET status = ?, 
+          resolved_at = CASE WHEN ? = 'RESOLVED' THEN CURRENT_TIMESTAMP ELSE resolved_at END,
+          updated_at = CURRENT_TIMESTAMP
       WHERE issue_id = ?
     `;
 
-    const [result] = await pool.query<ResultSetHeader>(sql, [status, issueId]);
+    const [result] = await pool.query<ResultSetHeader>(sql, [status, status, issueId]);
     return result.affectedRows > 0;
   }
 }
